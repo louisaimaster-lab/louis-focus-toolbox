@@ -99,63 +99,48 @@ function initAmbientSynth() {
 
     // 3. Pre-render High-Fidelity Cozy Bedroom Rain (Identical to YouTube eTeD8DAta4c)
     // Absolutely NO individual sharp popping pulses, clicks, or digital shaking artifacts.
-    // Deep, cohesive, warm air hum + slow-swelling smooth liquid rain wash.
+    // Highly continuous, deep, warm cozy air hum + smooth, swelling liquid rain wash.
     const rainSecs = 20;
     const rainSize = ctx.sampleRate * rainSecs;
     const rainBuffer = ctx.createBuffer(1, rainSize, ctx.sampleRate);
     const rainOut = rainBuffer.getChannelData(0);
 
+    const brownData = noiseBuffers['brown'].getChannelData(0);
+    const pinkData = noiseBuffers['pink'].getChannelData(0);
+
     let humPhase = 0;
     const humFreq = 55; // Cozy bedroom heater/vent drone frequency
 
-    // Generate in a single, perfectly continuous, organic mathematical pass
-    let r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0, r6 = 0; // Pink state
-    let brVal = 0; // Brown state for hum
-    let liquidVal = 0; // Brown state for liquid downpour
-    
     for (let i = 0; i < rainSize; i++) {
       const t = i / ctx.sampleRate;
-      const white = Math.random() * 2 - 1;
       
-      // Pink Noise
-      r0 = 0.99886 * r0 + white * 0.0555179;
-      r1 = 0.99332 * r1 + white * 0.0750759;
-      r2 = 0.96900 * r2 + white * 0.1538520;
-      r3 = 0.86650 * r3 + white * 0.3104856;
-      r4 = 0.55000 * r4 + white * 0.5329522;
-      r5 = -0.7616 * r5 - white * 0.0168980;
-      const pink = r0 + r1 + r2 + r3 + r4 + r5 + r6 + white * 0.5362;
-      r6 = white * 0.115926;
-
-      // Brown Noise 1 (heater drone)
-      brVal = (brVal + (0.02 * white)) / 1.02;
-
-      // Brown Noise 2 (liquid rain wash)
-      const white2 = Math.random() * 2 - 1;
-      liquidVal = (liquidVal + (0.018 * white2)) / 1.018;
+      // Read pre-rendered stable noises looped
+      const brownSample = brownData[i % brownData.length];
+      const pinkSample = pinkData[i % pinkData.length];
 
       // A) Deep Cozy Bedroom Ventilation Hum:
       // Solid continuous 55Hz sine wave + deep warm brown noise background drone
       const humSine = Math.sin(humPhase);
       humPhase += (2 * Math.PI * humFreq) / ctx.sampleRate;
-      const cozyHum = (humSine * 0.009) + (brVal * 0.045);
+      const cozyHum = (humSine * 0.08) + (brownSample * 0.25);
 
       // B) Soothing Smooth Liquid Downpour Wash:
-      // Warm, deep low-frequency washing sound without sharp cracking clicks.
-      // Sweeps slowly using mathematically prime, multi-layered amplitude swells (10s and 16s periods)
+      // Warm, deep low-frequency washing sound. Uses brown noise as the base for organic downpour depth.
+      // Sweeps slowly using mathematically prime, multi-layered amplitude swells (12.5s and 20s periods)
       // to mimic sheets of rain blowing gently in the wind.
-      const swellA = Math.sin(2 * Math.PI * 0.10 * t) * 0.15 + 0.85; 
-      const swellB = Math.sin(2 * Math.PI * 0.06 * t) * 0.10 + 0.90;
-      const rainBody = (liquidVal * 0.45 + pink * 0.10) * swellA * swellB;
+      const swellA = Math.sin(2 * Math.PI * 0.08 * t) * 0.15 + 0.85; 
+      const swellB = Math.sin(2 * Math.PI * 0.05 * t) * 0.10 + 0.90;
+      const rainBody = (brownSample * 0.75 + pinkSample * 0.25) * swellA * swellB;
 
       // C) Delicate Water Splatter Textures:
-      // Extremely quiet high-passed pink noise to simulate tiny droplets pattering on glass.
-      // Sweeps slowly at 3.5s intervals to sound like running water streams rather than popping clicks.
-      const swellC = Math.sin(2 * Math.PI * 0.28 * t) * 0.2 + 0.8;
-      const rainHighSheets = pink * 0.005 * swellC;
+      // Extremely quiet pink noise to simulate tiny droplets pattering on glass.
+      // Sweeps slowly at 4s intervals to sound like running water streams rather than popping clicks.
+      const swellC = Math.sin(2 * Math.PI * 0.25 * t) * 0.2 + 0.8;
+      const rainHighSheets = pinkSample * 0.03 * swellC;
 
-      // Combine cozy hum + deep rain wash + soft water texture
-      rainOut[i] = cozyHum + rainBody + rainHighSheets;
+      // Combine cozy hum (35%) + deep rain wash (65%) + soft water texture (15%)
+      // This heavy bias towards brown noise ensures an incredibly warm, smooth, cozy sound profile.
+      rainOut[i] = (cozyHum * 0.35) + (rainBody * 0.65) + (rainHighSheets * 0.15);
     }
 
     // Normalization & Limiting for digital headroom
@@ -171,7 +156,7 @@ function initAmbientSynth() {
       }
     }
     noiseBuffers['rain'] = rainBuffer;
-    console.log("YouTube-matching Cozy Bedroom Rain pre-rendered successfully!");
+    console.log("YouTube-matching Cozy Bedroom Rain successfully pre-rendered from stable base buffers!");
   }
 
   // Generates a native AudioBufferSourceNode referencing our pre-rendered buffers
