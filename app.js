@@ -174,59 +174,107 @@ function initAmbientSynth() {
     };
   }
 
-  // Synth 2: Continuous Rain Noise (No active oscillators!)
-  // Eliminates oscillator pile-up and resource exhaustion entirely
+  // Synth 2: Multi-Layered Organic Rain Synthesizer
+  // Combines 4 distinct frequency bands and mathematically-prime LFO modulations
+  // to recreate the complex, layered, non-repeating acoustic behavior of real rain.
   function startRainSynth(ctx) {
-    // 1. Rain body (Filtered Pink noise)
-    const rainBody = createNoiseNode(ctx, 'pink');
-    const lpFilter = ctx.createBiquadFilter();
-    lpFilter.type = 'lowpass';
-    lpFilter.frequency.value = 1100; // Soothing rain shower body
-    
-    const rainGain = ctx.createGain();
-    rainGain.gain.value = 0.8;
-    
-    rainBody.connect(lpFilter).connect(rainGain);
+    // Layer 1: Distant Heavy Rain Shower (Lowpass rumble)
+    const rainBase = createNoiseNode(ctx, 'pink');
+    const lpBase = ctx.createBiquadFilter();
+    lpBase.type = 'lowpass';
+    lpBase.frequency.value = 650;
+    const gainBase = ctx.createGain();
+    gainBase.gain.value = 0.55;
+    rainBase.connect(lpBase).connect(gainBase);
 
-    // 2. Soothing pitter-patter crackles (High-passed Pink noise + LFO amplitude modulation)
-    const rainCrackles = createNoiseNode(ctx, 'pink');
-    const hpFilter = ctx.createBiquadFilter();
-    hpFilter.type = 'highpass';
-    hpFilter.frequency.value = 2600; // Crisp drop crackles
+    // Layer 2: Woody Tree Drips (Deep organic plops using brown noise)
+    const dripsNoise = createNoiseNode(ctx, 'brown');
+    const bpDrips = ctx.createBiquadFilter();
+    bpDrips.type = 'bandpass';
+    bpDrips.frequency.value = 480;
+    bpDrips.Q.value = 3.5;
+    const gainDrips = ctx.createGain();
+    gainDrips.gain.value = 0.25;
     
-    const crackleGain = ctx.createGain();
-    crackleGain.gain.value = 0.08;
-    
-    // Modulate crackles slightly to sound like organic individual drops
-    const crackleLfo = ctx.createOscillator();
-    crackleLfo.frequency.value = 15; // Rapid flutter
-    
-    const crackleLfoGain = ctx.createGain();
-    crackleLfoGain.gain.value = 0.05;
-    
-    crackleLfo.connect(crackleLfoGain);
-    crackleLfoGain.connect(crackleGain.gain); // Modulates crackle gain
-    
-    rainCrackles.connect(hpFilter).connect(crackleGain);
+    const lfoDrips = ctx.createOscillator();
+    lfoDrips.type = 'triangle';
+    lfoDrips.frequency.value = 1.3; // Natural dripping rhythm
+    const lfoDripsGain = ctx.createGain();
+    lfoDripsGain.gain.value = 0.20;
+    lfoDrips.connect(lfoDripsGain).connect(gainDrips.gain);
+    dripsNoise.connect(bpDrips).connect(gainDrips);
 
+    // Layer 3: High Pitter-Patter (Crisp individual droplet crackles)
+    const cracklesNoise = createNoiseNode(ctx, 'pink');
+    const hpCrackles = ctx.createBiquadFilter();
+    hpCrackles.type = 'highpass';
+    hpCrackles.frequency.value = 3600;
+    const gainCrackles = ctx.createGain();
+    gainCrackles.gain.value = 0.12;
+
+    // Use two prime-frequency LFOs to create an organic, non-repeating envelope
+    const lfoA = ctx.createOscillator();
+    lfoA.frequency.value = 5.7;
+    const lfoB = ctx.createOscillator();
+    lfoB.frequency.value = 9.3;
+    const lfoSumGain = ctx.createGain();
+    lfoSumGain.gain.value = 0.06;
+    
+    lfoA.connect(lfoSumGain);
+    lfoB.connect(lfoSumGain);
+    lfoSumGain.connect(gainCrackles.gain);
+    cracklesNoise.connect(hpCrackles).connect(gainCrackles);
+
+    // Layer 4: Window Pane Splashes (Medium-field wind-blown droplets)
+    const splashNoise = createNoiseNode(ctx, 'pink');
+    const bpSplash = ctx.createBiquadFilter();
+    bpSplash.type = 'bandpass';
+    bpSplash.frequency.value = 1600;
+    bpSplash.Q.value = 1.8;
+    const gainSplash = ctx.createGain();
+    gainSplash.gain.value = 0.25;
+
+    const lfoSplash = ctx.createOscillator();
+    lfoSplash.frequency.value = 0.22; // Slow wind gusting
+    const lfoSplashGain = ctx.createGain();
+    lfoSplashGain.gain.value = 0.15;
+    lfoSplash.connect(lfoSplashGain).connect(gainSplash.gain);
+    splashNoise.connect(bpSplash).connect(gainSplash);
+
+    // Combine all 4 layers
     const masterGain = ctx.createGain();
-    masterGain.gain.value = 0;
+    masterGain.gain.value = 0; // Controlled by slider
     
-    rainGain.connect(masterGain);
-    crackleGain.connect(masterGain);
+    gainBase.connect(masterGain);
+    gainDrips.connect(masterGain);
+    gainCrackles.connect(masterGain);
+    gainSplash.connect(masterGain);
     masterGain.connect(ctx.destination);
     
-    rainBody.start();
-    rainCrackles.start();
-    crackleLfo.start();
+    // Start all sources
+    rainBase.start();
+    dripsNoise.start();
+    cracklesNoise.start();
+    splashNoise.start();
+    
+    lfoDrips.start();
+    lfoA.start();
+    lfoB.start();
+    lfoSplash.start();
     
     return {
       masterGain,
       stop: () => {
         try {
-          rainBody.stop();
-          rainCrackles.stop();
-          crackleLfo.stop();
+          rainBase.stop();
+          dripsNoise.stop();
+          cracklesNoise.stop();
+          splashNoise.stop();
+          
+          lfoDrips.stop();
+          lfoA.stop();
+          lfoB.stop();
+          lfoSplash.stop();
         } catch(err) {}
       }
     };
