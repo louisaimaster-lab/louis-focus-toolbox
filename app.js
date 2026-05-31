@@ -97,17 +97,26 @@ function initAmbientSynth() {
     }
     noiseBuffers['pink'] = pinkBuffer;
 
-    // 3. Pre-render High-Fidelity Organic Rain (Layered individual droplets)
-    // Generates a 20-second organic canvas containing randomized, non-overlapping droplet transients
+    // 3. Pre-render High-Fidelity Cozy Rain on Window (Similar to YouTube video eTeD8DAta4c)
+    // Combines:
+    // A) Cozy bedroom heater hum (very low-frequency warm pink/brown noise and 55Hz fan drone)
+    // B) Soothing steady light rain bed (gentle, continuous low-passed pink noise)
+    // C) Soft wet droplets on glass (individual frequency-sweeping splats with glass-dampened transients)
     const rainSecs = 20;
     const rainSize = ctx.sampleRate * rainSecs;
     const rainBuffer = ctx.createBuffer(1, rainSize, ctx.sampleRate);
     const rainOut = rainBuffer.getChannelData(0);
 
-    // Distant background mist: extremely soft low-passed pink noise
-    let r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0, r6 = 0;
+    let humPhase = 0;
+    const humFreq = 55; // 55Hz deep cozy heating fan hum
+
+    // 1. Generate Cozy Bedroom Hum & Steady Continuous Rain Bed
+    let r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0, r6 = 0; // Pink state
+    let brownVal = 0; // Brown state
     for (let i = 0; i < rainSize; i++) {
       const white = Math.random() * 2 - 1;
+      
+      // Pink Noise
       r0 = 0.99886 * r0 + white * 0.0555179;
       r1 = 0.99332 * r1 + white * 0.0750759;
       r2 = 0.96900 * r2 + white * 0.1538520;
@@ -116,62 +125,73 @@ function initAmbientSynth() {
       r5 = -0.7616 * r5 - white * 0.0168980;
       const pink = r0 + r1 + r2 + r3 + r4 + r5 + r6 + white * 0.5362;
       r6 = white * 0.115926;
+
+      // Brown Noise
+      brownVal = (brownVal + (0.02 * white)) / 1.02;
       
-      // Deep low-pass representation of distant downpour bed
-      rainOut[i] = pink * 0.003;
+      // Cozy Bedroom Hum: 55Hz sine wave + deep warm brown noise background ventilation
+      const humSine = Math.sin(humPhase);
+      humPhase += (2 * Math.PI * humFreq) / ctx.sampleRate;
+      const cozyHum = (humSine * 0.012) + (brownVal * 0.035);
+      
+      // Soothing Steady Rain Shower Bed: Low-passed gentle continuous pink noise with organic swells
+      const swell = Math.sin(2 * Math.PI * 0.05 * (i / ctx.sampleRate)) * 0.08 + 0.92;
+      const steadyRain = pink * 0.006 * swell;
+      
+      rainOut[i] = cozyHum + steadyRain;
     }
 
-    // Now scatter randomized individual droplet splatters (no uniform cyclic vibrating!)
-    const numDrops = 600; // About 30 drops per second
+    // 2. Synthesize Soft Wet Raindrops on Glass (Individual Glass Splats)
+    // Scatters randomized drops with wet, glass-pane dampened sound profiles
+    const numDrops = 500; // About 25 drops per second
     for (let d = 0; d < numDrops; d++) {
-      const startSample = Math.floor(Math.random() * (rainSize - ctx.sampleRate * 0.1));
-      const volume = Math.random() * 0.15 + 0.03;
-      const durationSecs = Math.random() * 0.03 + 0.008; // Short transients: 8ms to 38ms
+      const startSample = Math.floor(Math.random() * (rainSize - ctx.sampleRate * 0.15));
+      const volume = Math.random() * 0.11 + 0.025;
+      
+      // Dampened droplets have slightly longer, wetter decays than raw high-pass clicks
+      const durationSecs = Math.random() * 0.06 + 0.015; // 15ms to 75ms
       const durationSamples = Math.floor(durationSecs * ctx.sampleRate);
       
-      const startFreq = Math.random() * 2000 + 1200; // Frequency sweep starts high
-      const endFreq = Math.random() * 200 + 150;    // Frequency sweeps down to resonance
-      const decayRate = Math.random() * 120 + 80;   // Exponential decay
+      // Glass pane dampened frequencies: sweep down to simulate expansion of contact water
+      const startFreq = Math.random() * 800 + 1300; 
+      const endFreq = Math.random() * 150 + 180;
+      const decayRate = Math.random() * 80 + 40; 
       
-      let phase = 0;
+      let dropPhase = 0;
       for (let s = 0; s < durationSamples; s++) {
         const t = s / ctx.sampleRate;
         const index = startSample + s;
         if (index >= rainSize) break;
         
-        // Exponential volume decay envelope
         const env = Math.exp(-t * decayRate);
+        const freq = (startFreq - endFreq) * Math.exp(-t * 180.0) + endFreq;
+        dropPhase += (2 * Math.PI * freq) / ctx.sampleRate;
         
-        // Exponential frequency sweep down
-        const freq = (startFreq - endFreq) * Math.exp(-t * 220.0) + endFreq;
-        phase += (2 * Math.PI * freq) / ctx.sampleRate;
+        const sineVal = Math.sin(dropPhase);
         
-        // Sine wave droplet base
-        const sineVal = Math.sin(phase);
-        
-        // Transient noise burst click at the very start (decays extremely fast)
-        const clickEnv = Math.exp(-t * 400.0);
+        // Dampened glass impact: click decays very rapidly (8ms)
+        const clickEnv = Math.exp(-t * 250.0);
         const noiseVal = Math.random() * 2 - 1;
         
-        const sampleVal = (sineVal * 0.75 + noiseVal * 0.25 * clickEnv) * env * volume;
+        const sampleVal = (sineVal * 0.8 + noiseVal * 0.2 * clickEnv) * env * volume;
         rainOut[index] += sampleVal;
       }
     }
 
-    // Apply soft limiter to prevent clipping and normalize to a comfortable peak volume
+    // 3. Normalization & Limiting for digital headroom
     let maxVal = 0;
     for (let i = 0; i < rainSize; i++) {
       const absVal = Math.abs(rainOut[i]);
       if (absVal > maxVal) maxVal = absVal;
     }
     if (maxVal > 0) {
-      const factor = 0.8 / maxVal;
+      const factor = 0.82 / maxVal;
       for (let i = 0; i < rainSize; i++) {
         rainOut[i] *= factor;
       }
     }
     noiseBuffers['rain'] = rainBuffer;
-    console.log("High-fidelity native noise & rain buffers successfully pre-rendered!");
+    console.log("YouTube-matching Cozy Bedroom Rain on Window pre-rendered successfully!");
   }
 
   // Generates a native AudioBufferSourceNode referencing our pre-rendered buffers
