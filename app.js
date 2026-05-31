@@ -61,8 +61,8 @@ function initAmbientSynth() {
     return audioCtx;
   }
 
-  // Pre-render 15 seconds of infinite mathematical noise on first load
-  // Takes under 2ms to generate and completely eliminates loops, stutters, and browser JS engine limits
+  // Pre-render 15-20 seconds of infinite mathematical noise and organic rain on first load
+  // Completely eliminates runtime loops, stutters, active oscillators, and browser JS engine limits
   function preRenderNoiseBuffers(ctx) {
     const seconds = 15;
     const bufferSize = ctx.sampleRate * seconds;
@@ -96,7 +96,82 @@ function initAmbientSynth() {
       pinkOut[i] *= 0.11; // Compensate amplitude
     }
     noiseBuffers['pink'] = pinkBuffer;
-    console.log("High-fidelity native noise buffers successfully pre-rendered!");
+
+    // 3. Pre-render High-Fidelity Organic Rain (Layered individual droplets)
+    // Generates a 20-second organic canvas containing randomized, non-overlapping droplet transients
+    const rainSecs = 20;
+    const rainSize = ctx.sampleRate * rainSecs;
+    const rainBuffer = ctx.createBuffer(1, rainSize, ctx.sampleRate);
+    const rainOut = rainBuffer.getChannelData(0);
+
+    // Distant background mist: extremely soft low-passed pink noise
+    let r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0, r6 = 0;
+    for (let i = 0; i < rainSize; i++) {
+      const white = Math.random() * 2 - 1;
+      r0 = 0.99886 * r0 + white * 0.0555179;
+      r1 = 0.99332 * r1 + white * 0.0750759;
+      r2 = 0.96900 * r2 + white * 0.1538520;
+      r3 = 0.86650 * r3 + white * 0.3104856;
+      r4 = 0.55000 * r4 + white * 0.5329522;
+      r5 = -0.7616 * r5 - white * 0.0168980;
+      const pink = r0 + r1 + r2 + r3 + r4 + r5 + r6 + white * 0.5362;
+      r6 = white * 0.115926;
+      
+      // Deep low-pass representation of distant downpour bed
+      rainOut[i] = pink * 0.003;
+    }
+
+    // Now scatter randomized individual droplet splatters (no uniform cyclic vibrating!)
+    const numDrops = 600; // About 30 drops per second
+    for (let d = 0; d < numDrops; d++) {
+      const startSample = Math.floor(Math.random() * (rainSize - ctx.sampleRate * 0.1));
+      const volume = Math.random() * 0.15 + 0.03;
+      const durationSecs = Math.random() * 0.03 + 0.008; // Short transients: 8ms to 38ms
+      const durationSamples = Math.floor(durationSecs * ctx.sampleRate);
+      
+      const startFreq = Math.random() * 2000 + 1200; // Frequency sweep starts high
+      const endFreq = Math.random() * 200 + 150;    // Frequency sweeps down to resonance
+      const decayRate = Math.random() * 120 + 80;   // Exponential decay
+      
+      let phase = 0;
+      for (let s = 0; s < durationSamples; s++) {
+        const t = s / ctx.sampleRate;
+        const index = startSample + s;
+        if (index >= rainSize) break;
+        
+        // Exponential volume decay envelope
+        const env = Math.exp(-t * decayRate);
+        
+        // Exponential frequency sweep down
+        const freq = (startFreq - endFreq) * Math.exp(-t * 220.0) + endFreq;
+        phase += (2 * Math.PI * freq) / ctx.sampleRate;
+        
+        // Sine wave droplet base
+        const sineVal = Math.sin(phase);
+        
+        // Transient noise burst click at the very start (decays extremely fast)
+        const clickEnv = Math.exp(-t * 400.0);
+        const noiseVal = Math.random() * 2 - 1;
+        
+        const sampleVal = (sineVal * 0.75 + noiseVal * 0.25 * clickEnv) * env * volume;
+        rainOut[index] += sampleVal;
+      }
+    }
+
+    // Apply soft limiter to prevent clipping and normalize to a comfortable peak volume
+    let maxVal = 0;
+    for (let i = 0; i < rainSize; i++) {
+      const absVal = Math.abs(rainOut[i]);
+      if (absVal > maxVal) maxVal = absVal;
+    }
+    if (maxVal > 0) {
+      const factor = 0.8 / maxVal;
+      for (let i = 0; i < rainSize; i++) {
+        rainOut[i] *= factor;
+      }
+    }
+    noiseBuffers['rain'] = rainBuffer;
+    console.log("High-fidelity native noise & rain buffers successfully pre-rendered!");
   }
 
   // Generates a native AudioBufferSourceNode referencing our pre-rendered buffers
@@ -174,107 +249,28 @@ function initAmbientSynth() {
     };
   }
 
-  // Synth 2: Multi-Layered Organic Rain Synthesizer
-  // Combines 4 distinct frequency bands and mathematically-prime LFO modulations
-  // to recreate the complex, layered, non-repeating acoustic behavior of real rain.
+  // Synth 2: Pre-rendered High-Fidelity Organic Rain
+  // Plays randomized, discrete droplets with no LFO "shaking" artifacts
   function startRainSynth(ctx) {
-    // Layer 1: Distant Heavy Rain Shower (Lowpass rumble)
-    const rainBase = createNoiseNode(ctx, 'pink');
-    const lpBase = ctx.createBiquadFilter();
-    lpBase.type = 'lowpass';
-    lpBase.frequency.value = 650;
-    const gainBase = ctx.createGain();
-    gainBase.gain.value = 0.55;
-    rainBase.connect(lpBase).connect(gainBase);
-
-    // Layer 2: Woody Tree Drips (Deep organic plops using brown noise)
-    const dripsNoise = createNoiseNode(ctx, 'brown');
-    const bpDrips = ctx.createBiquadFilter();
-    bpDrips.type = 'bandpass';
-    bpDrips.frequency.value = 480;
-    bpDrips.Q.value = 3.5;
-    const gainDrips = ctx.createGain();
-    gainDrips.gain.value = 0.25;
+    const rainNode = createNoiseNode(ctx, 'rain');
     
-    const lfoDrips = ctx.createOscillator();
-    lfoDrips.type = 'triangle';
-    lfoDrips.frequency.value = 1.3; // Natural dripping rhythm
-    const lfoDripsGain = ctx.createGain();
-    lfoDripsGain.gain.value = 0.20;
-    lfoDrips.connect(lfoDripsGain).connect(gainDrips.gain);
-    dripsNoise.connect(bpDrips).connect(gainDrips);
+    // Add a clean lowpass filter to remove any high-frequency digital harshness
+    const lpFilter = ctx.createBiquadFilter();
+    lpFilter.type = 'lowpass';
+    lpFilter.frequency.value = 5000; 
 
-    // Layer 3: High Pitter-Patter (Crisp individual droplet crackles)
-    const cracklesNoise = createNoiseNode(ctx, 'pink');
-    const hpCrackles = ctx.createBiquadFilter();
-    hpCrackles.type = 'highpass';
-    hpCrackles.frequency.value = 3600;
-    const gainCrackles = ctx.createGain();
-    gainCrackles.gain.value = 0.12;
-
-    // Use two prime-frequency LFOs to create an organic, non-repeating envelope
-    const lfoA = ctx.createOscillator();
-    lfoA.frequency.value = 5.7;
-    const lfoB = ctx.createOscillator();
-    lfoB.frequency.value = 9.3;
-    const lfoSumGain = ctx.createGain();
-    lfoSumGain.gain.value = 0.06;
-    
-    lfoA.connect(lfoSumGain);
-    lfoB.connect(lfoSumGain);
-    lfoSumGain.connect(gainCrackles.gain);
-    cracklesNoise.connect(hpCrackles).connect(gainCrackles);
-
-    // Layer 4: Window Pane Splashes (Medium-field wind-blown droplets)
-    const splashNoise = createNoiseNode(ctx, 'pink');
-    const bpSplash = ctx.createBiquadFilter();
-    bpSplash.type = 'bandpass';
-    bpSplash.frequency.value = 1600;
-    bpSplash.Q.value = 1.8;
-    const gainSplash = ctx.createGain();
-    gainSplash.gain.value = 0.25;
-
-    const lfoSplash = ctx.createOscillator();
-    lfoSplash.frequency.value = 0.22; // Slow wind gusting
-    const lfoSplashGain = ctx.createGain();
-    lfoSplashGain.gain.value = 0.15;
-    lfoSplash.connect(lfoSplashGain).connect(gainSplash.gain);
-    splashNoise.connect(bpSplash).connect(gainSplash);
-
-    // Combine all 4 layers
     const masterGain = ctx.createGain();
-    masterGain.gain.value = 0; // Controlled by slider
+    masterGain.gain.value = 0;
     
-    gainBase.connect(masterGain);
-    gainDrips.connect(masterGain);
-    gainCrackles.connect(masterGain);
-    gainSplash.connect(masterGain);
-    masterGain.connect(ctx.destination);
+    rainNode.connect(lpFilter).connect(masterGain).connect(ctx.destination);
     
-    // Start all sources
-    rainBase.start();
-    dripsNoise.start();
-    cracklesNoise.start();
-    splashNoise.start();
-    
-    lfoDrips.start();
-    lfoA.start();
-    lfoB.start();
-    lfoSplash.start();
+    rainNode.start();
     
     return {
       masterGain,
       stop: () => {
         try {
-          rainBase.stop();
-          dripsNoise.stop();
-          cracklesNoise.stop();
-          splashNoise.stop();
-          
-          lfoDrips.stop();
-          lfoA.stop();
-          lfoB.stop();
-          lfoSplash.stop();
+          rainNode.stop();
         } catch(err) {}
       }
     };
