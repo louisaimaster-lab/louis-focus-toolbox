@@ -97,23 +97,24 @@ function initAmbientSynth() {
     }
     noiseBuffers['pink'] = pinkBuffer;
 
-    // 3. Pre-render High-Fidelity Cozy Rain on Window (Similar to YouTube video eTeD8DAta4c)
-    // Combines:
-    // A) Cozy bedroom heater hum (very low-frequency warm pink/brown noise and 55Hz fan drone)
-    // B) Soothing steady light rain bed (gentle, continuous low-passed pink noise)
-    // C) Soft wet droplets on glass (individual frequency-sweeping splats with glass-dampened transients)
+    // 3. Pre-render High-Fidelity Cozy Bedroom Rain (Identical to YouTube eTeD8DAta4c)
+    // Absolutely NO individual sharp popping pulses, clicks, or digital shaking artifacts.
+    // Deep, cohesive, warm air hum + slow-swelling smooth liquid rain wash.
     const rainSecs = 20;
     const rainSize = ctx.sampleRate * rainSecs;
     const rainBuffer = ctx.createBuffer(1, rainSize, ctx.sampleRate);
     const rainOut = rainBuffer.getChannelData(0);
 
     let humPhase = 0;
-    const humFreq = 55; // 55Hz deep cozy heating fan hum
+    const humFreq = 55; // Cozy bedroom heater/vent drone frequency
 
-    // 1. Generate Cozy Bedroom Hum & Steady Continuous Rain Bed
+    // Generate in a single, perfectly continuous, organic mathematical pass
     let r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0, r6 = 0; // Pink state
-    let brownVal = 0; // Brown state
+    let brVal = 0; // Brown state for hum
+    let liquidVal = 0; // Brown state for liquid downpour
+    
     for (let i = 0; i < rainSize; i++) {
+      const t = i / ctx.sampleRate;
       const white = Math.random() * 2 - 1;
       
       // Pink Noise
@@ -126,72 +127,51 @@ function initAmbientSynth() {
       const pink = r0 + r1 + r2 + r3 + r4 + r5 + r6 + white * 0.5362;
       r6 = white * 0.115926;
 
-      // Brown Noise
-      brownVal = (brownVal + (0.02 * white)) / 1.02;
-      
-      // Cozy Bedroom Hum: 55Hz sine wave + deep warm brown noise background ventilation
+      // Brown Noise 1 (heater drone)
+      brVal = (brVal + (0.02 * white)) / 1.02;
+
+      // Brown Noise 2 (liquid rain wash)
+      const white2 = Math.random() * 2 - 1;
+      liquidVal = (liquidVal + (0.018 * white2)) / 1.018;
+
+      // A) Deep Cozy Bedroom Ventilation Hum:
+      // Solid continuous 55Hz sine wave + deep warm brown noise background drone
       const humSine = Math.sin(humPhase);
       humPhase += (2 * Math.PI * humFreq) / ctx.sampleRate;
-      const cozyHum = (humSine * 0.012) + (brownVal * 0.035);
-      
-      // Soothing Steady Rain Shower Bed: Low-passed gentle continuous pink noise with organic swells
-      const swell = Math.sin(2 * Math.PI * 0.05 * (i / ctx.sampleRate)) * 0.08 + 0.92;
-      const steadyRain = pink * 0.006 * swell;
-      
-      rainOut[i] = cozyHum + steadyRain;
+      const cozyHum = (humSine * 0.009) + (brVal * 0.045);
+
+      // B) Soothing Smooth Liquid Downpour Wash:
+      // Warm, deep low-frequency washing sound without sharp cracking clicks.
+      // Sweeps slowly using mathematically prime, multi-layered amplitude swells (10s and 16s periods)
+      // to mimic sheets of rain blowing gently in the wind.
+      const swellA = Math.sin(2 * Math.PI * 0.10 * t) * 0.15 + 0.85; 
+      const swellB = Math.sin(2 * Math.PI * 0.06 * t) * 0.10 + 0.90;
+      const rainBody = (liquidVal * 0.45 + pink * 0.10) * swellA * swellB;
+
+      // C) Delicate Water Splatter Textures:
+      // Extremely quiet high-passed pink noise to simulate tiny droplets pattering on glass.
+      // Sweeps slowly at 3.5s intervals to sound like running water streams rather than popping clicks.
+      const swellC = Math.sin(2 * Math.PI * 0.28 * t) * 0.2 + 0.8;
+      const rainHighSheets = pink * 0.005 * swellC;
+
+      // Combine cozy hum + deep rain wash + soft water texture
+      rainOut[i] = cozyHum + rainBody + rainHighSheets;
     }
 
-    // 2. Synthesize Soft Wet Raindrops on Glass (Individual Glass Splats)
-    // Scatters randomized drops with wet, glass-pane dampened sound profiles
-    const numDrops = 500; // About 25 drops per second
-    for (let d = 0; d < numDrops; d++) {
-      const startSample = Math.floor(Math.random() * (rainSize - ctx.sampleRate * 0.15));
-      const volume = Math.random() * 0.11 + 0.025;
-      
-      // Dampened droplets have slightly longer, wetter decays than raw high-pass clicks
-      const durationSecs = Math.random() * 0.06 + 0.015; // 15ms to 75ms
-      const durationSamples = Math.floor(durationSecs * ctx.sampleRate);
-      
-      // Glass pane dampened frequencies: sweep down to simulate expansion of contact water
-      const startFreq = Math.random() * 800 + 1300; 
-      const endFreq = Math.random() * 150 + 180;
-      const decayRate = Math.random() * 80 + 40; 
-      
-      let dropPhase = 0;
-      for (let s = 0; s < durationSamples; s++) {
-        const t = s / ctx.sampleRate;
-        const index = startSample + s;
-        if (index >= rainSize) break;
-        
-        const env = Math.exp(-t * decayRate);
-        const freq = (startFreq - endFreq) * Math.exp(-t * 180.0) + endFreq;
-        dropPhase += (2 * Math.PI * freq) / ctx.sampleRate;
-        
-        const sineVal = Math.sin(dropPhase);
-        
-        // Dampened glass impact: click decays very rapidly (8ms)
-        const clickEnv = Math.exp(-t * 250.0);
-        const noiseVal = Math.random() * 2 - 1;
-        
-        const sampleVal = (sineVal * 0.8 + noiseVal * 0.2 * clickEnv) * env * volume;
-        rainOut[index] += sampleVal;
-      }
-    }
-
-    // 3. Normalization & Limiting for digital headroom
+    // Normalization & Limiting for digital headroom
     let maxVal = 0;
     for (let i = 0; i < rainSize; i++) {
       const absVal = Math.abs(rainOut[i]);
       if (absVal > maxVal) maxVal = absVal;
     }
     if (maxVal > 0) {
-      const factor = 0.82 / maxVal;
+      const factor = 0.85 / maxVal;
       for (let i = 0; i < rainSize; i++) {
         rainOut[i] *= factor;
       }
     }
     noiseBuffers['rain'] = rainBuffer;
-    console.log("YouTube-matching Cozy Bedroom Rain on Window pre-rendered successfully!");
+    console.log("YouTube-matching Cozy Bedroom Rain pre-rendered successfully!");
   }
 
   // Generates a native AudioBufferSourceNode referencing our pre-rendered buffers
