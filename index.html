@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Louis' Focus Command Center</title>
+  <!-- Modern Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <!-- Ambient Space Background Elements -->
+  <div class="glow-bg">
+    <div class="glow-circle orb-blue"></div>
+    <div class="glow-circle orb-purple"></div>
+    <div class="glow-circle orb-teal"></div>
+  </div>
+
+  <div class="app-container minimal-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-logo">
+        <div class="logo-icon">
+          <i data-lucide="waves"></i>
+        </div>
+        <div class="logo-text">
+          <h1>LOUIS_FOCUS</h1>
+          <p>Personal Brainwave Coherence & Breath Control</p>
+        </div>
+      </div>
+      <div class="header-time">
+        <div class="time-now" id="digital-clock">00:00:00</div>
+        <div class="date-now" id="digital-date">Sunday, May 31, 2026</div>
+      </div>
+    </header>
+
+    <main class="app-grid minimal-grid">
+      <!-- Widget 1: Ambient Focus Sound Mixer -->
+      <section class="dashboard-card glass-panel" id="ambient-mixer-card">
+        <div class="card-header">
+          <div class="card-icon teal-gradient">
+            <i data-lucide="sliders"></i>
+          </div>
+          <div class="card-title">
+            <h2>Focus Sound Engine</h2>
+            <p>High-fidelity brainwave & ambient synths</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="ambient-mixer">
+            <!-- Sound 1: Binaural Beats -->
+            <div class="ambient-row">
+              <div class="ambient-info">
+                <i data-lucide="waves"></i>
+                <span>Binaural Focus Beat</span>
+              </div>
+              <div class="ambient-control">
+                <input type="range" min="0" max="1" step="0.05" value="0" class="vol-slider" data-noise="binaural">
+                <span class="vol-percentage">Off</span>
+              </div>
+            </div>
+            <!-- Sound 2: Deep Rain -->
+            <div class="ambient-row">
+              <div class="ambient-info">
+                <i data-lucide="cloud-rain"></i>
+                <span>Deep Rain</span>
+              </div>
+              <div class="ambient-control">
+                <input type="range" min="0" max="1" step="0.05" value="0" class="vol-slider" data-noise="rain">
+                <span class="vol-percentage">Off</span>
+              </div>
+            </div>
+            <!-- Sound 3: Ocean Swells -->
+            <div class="ambient-row">
+              <div class="ambient-info">
+                <i data-lucide="droplets"></i>
+                <span>Ocean Swells</span>
+              </div>
+              <div class="ambient-control">
+                <input type="range" min="0" max="1" step="0.05" value="0" class="vol-slider" data-noise="ocean">
+                <span class="vol-percentage">Off</span>
+              </div>
+            </div>
+            <!-- Sound 4: Forest Wind -->
+            <div class="ambient-row">
+              <div class="ambient-info">
+                <i data-lucide="wind"></i>
+                <span>Forest Wind</span>
+              </div>
+              <div class="ambient-control">
+                <input type="range" min="0" max="1" step="0.05" value="0" class="vol-slider" data-noise="wind">
+                <span class="vol-percentage">Off</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Widget 2: Breath & Click Counter -->
+      <section class="dashboard-card glass-panel" id="click-counter-card">
+        <div class="card-header">
+          <div class="card-icon blue-gradient">
+            <i data-lucide="plus-circle"></i>
+          </div>
+          <div class="card-title">
+            <h2>Breath & Click Counter</h2>
+            <p>Keep track of breaths, reps, and sets</p>
+          </div>
+          <button class="action-btn-sm" id="btn-reset-counter" title="Reset Count">
+            <i data-lucide="rotate-ccw"></i>
+          </button>
+        </div>
+        <div class="card-body counter-body">
+          <div class="counter-display">
+            <span id="counter-value">0</span>
+            <span class="counter-label">Total Clicks</span>
+          </div>
+          
+          <div class="counter-controls">
+            <button class="counter-btn dec-btn" id="btn-dec-counter" title="Decrease Count (-1)">
+              <i data-lucide="minus"></i>
+            </button>
+            <button class="counter-btn inc-btn" id="btn-inc-counter" title="Increase Count (+1)">
+              <i data-lucide="plus"></i>
+            </button>
+          </div>
+
+          <!-- Target Selection progress -->
+          <div class="counter-target-container">
+            <div class="target-select-row">
+              <label for="counter-target">Goal Target:</label>
+              <select id="counter-target">
+                <option value="0">No Limit</option>
+                <option value="10">10 Reps</option>
+                <option value="30">30 Breaths</option>
+                <option value="50">50 Breaths</option>
+                <option value="100">100 Clicks</option>
+              </select>
+            </div>
+            <div class="counter-progress-bar-bg" style="display: none;" id="counter-progress-container">
+              <div class="counter-progress-bar" id="counter-progress-bar"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Louis Focus Command Center &bull; Designed to elevate human productivity and brain coherence</p>
+      <div class="system-paths">
+        <span>Domain: <code class="path-tag">toolbox.nheep.com</code></span>
+        <span>Local IP: <code class="path-tag">127.0.0.1</code></span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Application Logic (Cache busted to load the new stable pre-rendered native Web Audio buffer engine) -->
+  <script src="app.js?v=1.0.4"></script>
+</body>
+</html>
