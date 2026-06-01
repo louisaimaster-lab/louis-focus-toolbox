@@ -40,6 +40,7 @@ function initAmbientSynth() {
   let audioCtx = null;
   const activeSynths = {};
   const noiseBuffers = {};
+  let rainAudio = null;
 
   // Explicitly initialize sliders to 0 and set label to "Off" on page load
   sliders.forEach(slider => {
@@ -97,66 +98,6 @@ function initAmbientSynth() {
     }
     noiseBuffers['pink'] = pinkBuffer;
 
-    // 3. Pre-render High-Fidelity Cozy Bedroom Rain (Identical to YouTube eTeD8DAta4c)
-    // Absolutely NO individual sharp popping pulses, clicks, or digital shaking artifacts.
-    // Highly continuous, deep, warm cozy air hum + smooth, swelling liquid rain wash.
-    const rainSecs = 20;
-    const rainSize = ctx.sampleRate * rainSecs;
-    const rainBuffer = ctx.createBuffer(1, rainSize, ctx.sampleRate);
-    const rainOut = rainBuffer.getChannelData(0);
-
-    const brownData = noiseBuffers['brown'].getChannelData(0);
-    const pinkData = noiseBuffers['pink'].getChannelData(0);
-
-    let humPhase = 0;
-    const humFreq = 55; // Cozy bedroom heater/vent drone frequency
-
-    for (let i = 0; i < rainSize; i++) {
-      const t = i / ctx.sampleRate;
-      
-      // Read pre-rendered stable noises looped
-      const brownSample = brownData[i % brownData.length];
-      const pinkSample = pinkData[i % pinkData.length];
-
-      // A) Deep Cozy Bedroom Ventilation Hum:
-      // Solid continuous 55Hz sine wave + deep warm brown noise background drone
-      const humSine = Math.sin(humPhase);
-      humPhase += (2 * Math.PI * humFreq) / ctx.sampleRate;
-      const cozyHum = (humSine * 0.08) + (brownSample * 0.25);
-
-      // B) Soothing Smooth Liquid Downpour Wash:
-      // Warm, deep low-frequency washing sound. Uses brown noise as the base for organic downpour depth.
-      // Sweeps slowly using mathematically prime, multi-layered amplitude swells (12.5s and 20s periods)
-      // to mimic sheets of rain blowing gently in the wind.
-      const swellA = Math.sin(2 * Math.PI * 0.08 * t) * 0.15 + 0.85; 
-      const swellB = Math.sin(2 * Math.PI * 0.05 * t) * 0.10 + 0.90;
-      const rainBody = (brownSample * 0.75 + pinkSample * 0.25) * swellA * swellB;
-
-      // C) Delicate Water Splatter Textures:
-      // Extremely quiet pink noise to simulate tiny droplets pattering on glass.
-      // Sweeps slowly at 4s intervals to sound like running water streams rather than popping clicks.
-      const swellC = Math.sin(2 * Math.PI * 0.25 * t) * 0.2 + 0.8;
-      const rainHighSheets = pinkSample * 0.03 * swellC;
-
-      // Combine cozy hum (35%) + deep rain wash (65%) + soft water texture (15%)
-      // This heavy bias towards brown noise ensures an incredibly warm, smooth, cozy sound profile.
-      rainOut[i] = (cozyHum * 0.35) + (rainBody * 0.65) + (rainHighSheets * 0.15);
-    }
-
-    // Normalization & Limiting for digital headroom
-    let maxVal = 0;
-    for (let i = 0; i < rainSize; i++) {
-      const absVal = Math.abs(rainOut[i]);
-      if (absVal > maxVal) maxVal = absVal;
-    }
-    if (maxVal > 0) {
-      const factor = 0.85 / maxVal;
-      for (let i = 0; i < rainSize; i++) {
-        rainOut[i] *= factor;
-      }
-    }
-    noiseBuffers['rain'] = rainBuffer;
-    console.log("YouTube-matching Cozy Bedroom Rain successfully pre-rendered from stable base buffers!");
   }
 
   // Generates a native AudioBufferSourceNode referencing our pre-rendered buffers
@@ -234,28 +175,29 @@ function initAmbientSynth() {
     };
   }
 
-  // Synth 2: Pre-rendered High-Fidelity Organic Rain
-  // Plays randomized, discrete droplets with no LFO "shaking" artifacts
+  // Synth 2: Real YouTube Cozy Bedroom Rain Loop File
+  // Plays a flawless 2-minute physical loop of the exact rain recording
   function startRainSynth(ctx) {
-    const rainNode = createNoiseNode(ctx, 'rain');
+    if (!rainAudio) {
+      rainAudio = new Audio('rain_loop.m4a');
+      rainAudio.loop = true;
+    }
     
-    // Add a clean lowpass filter to remove any high-frequency digital harshness
-    const lpFilter = ctx.createBiquadFilter();
-    lpFilter.type = 'lowpass';
-    lpFilter.frequency.value = 5000; 
-
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = 0;
+    rainAudio.play().catch(err => console.log("Audio playback blocked:", err));
     
-    rainNode.connect(lpFilter).connect(masterGain).connect(ctx.destination);
-    
-    rainNode.start();
+    const mockGain = {
+      value: 0,
+      linearRampToValueAtTime: (vol, time) => {
+        rainAudio.volume = Math.max(0, Math.min(1, vol));
+        mockGain.value = vol;
+      }
+    };
     
     return {
-      masterGain,
+      masterGain: { gain: mockGain },
       stop: () => {
         try {
-          rainNode.stop();
+          rainAudio.pause();
         } catch(err) {}
       }
     };
